@@ -18,7 +18,6 @@ brew update
 brew upgrade --cask codex-usage
 ```
 
-Codex Usage releases are currently unsigned. On first launch, Control-click
-**Codex Usage.app**, choose **Open**, then confirm the macOS prompt.
+Codex Usage releases are signed and notarized by Apple.
 
 Source and releases: <https://github.com/Agend-Systems/codex-usage-tracker>
