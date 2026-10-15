@@ -1,6 +1,6 @@
 cask "codex-usage" do
-  version "0.1.4"
-  sha256 "4b0da99e6c69427d0d1b54574f519963da1aede52922486d9393215c875ac330"
+  version "0.1.5"
+  sha256 "6ebc675df43ca3b1f53a028c3d7be516b1700f892e99011aef2ffb3411055ff3"
 
   url "https://github.com/Agend-Systems/codex-usage-tracker/releases/download/v#{version}/Codex.Usage.app.zip"
   name "Codex Usage"
