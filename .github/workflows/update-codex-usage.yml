@@ -51,8 +51,11 @@ jobs:
 
       - name: Validate updated cask
         if: steps.changes.outputs.updated == 'true'
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
         run: |
           brew tap --custom-remote Agend-Systems/tap "$GITHUB_WORKSPACE"
+          cp Casks/codex-usage.rb "$(brew --repository Agend-Systems/tap)/Casks/codex-usage.rb"
           brew style Casks/codex-usage.rb
           brew audit --cask --online Agend-Systems/tap/codex-usage
 
