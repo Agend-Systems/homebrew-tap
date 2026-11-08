@@ -1,9 +1,22 @@
 name: Update Codex Usage cask
 
 on:
-  schedule:
-    - cron: "17 * * * *"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (leave blank for the latest release)
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: Published Codex Usage release tag
+        required: true
+        type: string
+    secrets:
+      tap_deploy_key:
+        description: Write-enabled deploy key for Agend-Systems/homebrew-tap
+        required: true
 
 permissions:
   contents: write
@@ -17,17 +30,48 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - name: Require cross-repository publishing key
+        if: github.repository != 'Agend-Systems/homebrew-tap'
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.tap_deploy_key }}
+        run: |
+          if [[ -z "$TAP_DEPLOY_KEY" ]]; then
+            echo "A Homebrew tap deploy key is required for cross-repository updates." >&2
+            exit 1
+          fi
 
-      - name: Resolve latest Codex Usage release
+      - uses: actions/checkout@v4
+        with:
+          repository: Agend-Systems/homebrew-tap
+          ref: main
+          ssh-key: ${{ secrets.tap_deploy_key }}
+
+      - name: Resolve Codex Usage release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          tag="$(gh release view --repo Agend-Systems/codex-usage-tracker --json tagName --jq .tagName)"
+          tag="$RELEASE_TAG"
+          if [[ -z "$tag" ]]; then
+            tag="$(gh release view --repo Agend-Systems/codex-usage-tracker --json tagName --jq .tagName)"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid Codex Usage release tag: $tag" >&2
+            exit 1
+          fi
           version="${tag#v}"
-          asset_url="https://github.com/Agend-Systems/codex-usage-tracker/releases/download/${tag}/Codex.Usage.app.zip"
-          curl --fail --location --retry 3 --output "$RUNNER_TEMP/Codex.Usage.app.zip" "$asset_url"
+          for attempt in 1 2 3 4; do
+            if gh release download "$tag" --repo Agend-Systems/codex-usage-tracker \
+              --pattern "Codex.Usage.app.zip" --dir "$RUNNER_TEMP" --clobber; then
+              break
+            fi
+            if [[ "$attempt" == 4 ]]; then
+              echo "Could not download Codex Usage $tag after four attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
           sha256="$(shasum -a 256 "$RUNNER_TEMP/Codex.Usage.app.zip" | awk '{print $1}')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
@@ -37,7 +81,10 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
           SHA256: ${{ steps.release.outputs.sha256 }}
         run: |
+          # Ruby, rather than the shell, interpolates these programs.
+          # shellcheck disable=SC2016
           ruby -pi -e '$_ = "  version \"#{ENV.fetch("VERSION")}\"\n" if $_.start_with?("  version ")' Casks/codex-usage.rb
+          # shellcheck disable=SC2016
           ruby -pi -e '$_ = "  sha256 \"#{ENV.fetch("SHA256")}\"\n" if $_.start_with?("  sha256 ")' Casks/codex-usage.rb
 
       - name: Check for an update
